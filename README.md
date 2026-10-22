@@ -70,12 +70,52 @@ params {
 }
 ```
 
-### 3. Run Alignment and LILAC HLA typing
+### 3. Pull Singularity images (optional)
 
-Update the `ref_data_hmf_data_path` to point to your HMF tools reference data:
-```groovy
---ref_data_hmf_data_path "/your/actual/path/to/hmftools_data/"
+By default Nextflow downloads the images on the first run, into `work/singularity/` of each run. To reuse them across runs and projects, or to prepare them on a node with internet access, pull the 4 images used by oncoanalyser 3.0.0 for alignment, REDUX and LILAC into a shared cache directory:
+
+```bash
+CACHE_DIR=/path/to/singularity_cache
+mkdir -p ${CACHE_DIR}
+for img in \
+    fastp:0.23.4--hadf994f_2 \
+    mulled-v2-4dde50190ae599f2bb2027cb2c8763ea00fb5084:596c0d6a494faa218562f2be03af2714d454da4f-0 \
+    hmftools-redux:2.0.5--hdfd78af_0 \
+    hmftools-lilac:2.0--hdfd78af_0
+do
+    singularity pull --name "depot.galaxyproject.org-singularity-${img//:/-}.img" \
+        --dir ${CACHE_DIR} "https://depot.galaxyproject.org/singularity/${img}"
+done
 ```
+The file names follow the Nextflow naming convention (`depot.galaxyproject.org-singularity-<image>-<tag>.img`), so Nextflow finds them instead of downloading again. The images are FASTP and BWA-MEM2 (alignment), REDUX and LILAC.
+
+Then point the `singularity` block of `chr6_genome.config` to that directory:
+```groovy
+singularity {
+    ...
+    cacheDir = '/path/to/singularity_cache'
+}
+```
+You can also set `export NXF_SINGULARITY_CACHEDIR=/path/to/singularity_cache` before `sbatch` instead. `cacheDir` in the config takes precedence if both are set.
+
+### 4. Run Alignment and LILAC HLA typing
+
+Update the `CONFIG_FILE` path:
+```bash
+CONFIG_FILE=${3:-./oncoanalyser-lilac-only/chr6_genome.config}
+```
+
+Update the `CHR6_REF_DIR` path:
+```bash
+CHR6_REF_DIR="./oncoanalyser-lilac-only/chr6_reference"
+```
+
+Update the `HMF_DATA_DIR` path to the `hmf_data_min` folder of this repository:
+```bash
+HMF_DATA_DIR="./oncoanalyser-lilac-only/hmf_data_min"
+```
+
+> **No need for the full HMF resource bundle (~10 GB).** Alignment, REDUX and LILAC only use 3 HMF resources (~20 MB), shipped in `hmf_data_min/`. `chr6_genome.config` overrides `hmf_data_paths` so oncoanalyser does not look for the other files. This override matches oncoanalyser **3.0.0**; check it if you change `-revision`. If you add other steps (e.g. PURPLE/SAGE to get allele copy number and somatic mutations in LILAC), use the full bundle and remove the override.
 
 Prepare `input.csv` (oncoanalyser samplesheet), one row per sample/FASTQ pair, e.g.:
 ```csv
@@ -152,5 +192,7 @@ Also cite the tools used by this workflow. The full list is in the pipeline's [C
 - **bwa-mem2**: Vasimuddin Md, Misra S, Li H, Aluru S. Efficient Architecture-Aware Acceleration of BWA-MEM for Multicore Systems. _IPDPS_ 2019:314-324. doi: [10.1109/IPDPS.2019.00041](https://doi.org/10.1109/IPDPS.2019.00041).
 - **LILAC**: Martínez-Jiménez F, et al. Genetic immune escape landscape in primary and metastatic cancer. _Nat Genet._ 2023;55(5):820-831. doi: [10.1038/s41588-023-01367-1](https://doi.org/10.1038/s41588-023-01367-1).
 - **REDUX**: [hmftools/redux](https://github.com/hartwigmedical/hmftools/tree/master/redux) (Hartwig Medical Foundation).
+
+The resource files in `hmf_data_min/` are copied unchanged from the Hartwig Medical Foundation oncoanalyser reference bundle (`hmf_pipeline_resources.38_v3.0.0--8`).
 
 
