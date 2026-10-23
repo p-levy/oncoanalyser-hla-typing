@@ -1,4 +1,4 @@
-# Chromosome 6-Only Alignment and HLA typing with nf-core/oncoanalyser
+# Chromosome 6-only DNA mapping and HLA typing with nf-core/oncoanalyser
 
 This setup allows you to run nf-core/oncoanalyser alignment restricted to chromosome 6 only, and LILAC for HLA typing. 
 
@@ -112,14 +112,21 @@ HMF_DATA_DIR="/path/to/oncoanalyser-hla-typing/hmf_data_min"
 
 > **No need for the full HMF resource bundle (~10 GB).** Alignment, REDUX and LILAC only use 3 HMF resources (~20 MB), shipped in `hmf_data_min/`. `chr6_genome.config` overrides `hmf_data_paths` so oncoanalyser does not look for the other files. This override matches oncoanalyser **3.0.0**; check it if you change `-revision`. If you add other steps (e.g. PURPLE/SAGE to get allele copy number and somatic mutations in LILAC), use the full bundle and remove the override.
 
-Prepare `input.csv` (oncoanalyser samplesheet), one row per sample/FASTQ pair, e.g.:
+Prepare `input.csv` (oncoanalyser samplesheet), one row per sample/FASTQ pair. A single samplesheet can hold many patients: Nextflow processes them all in one run, in parallel on the cluster. For example, 3 patients:
 ```csv
 group_id,subject_id,sample_id,sample_type,sequence_type,filetype,info,filepath
-cohort,patient,patient_T,tumor,dna,fastq,library_id:patient_id;lane:1,/path/to/patient_T_1.fastq.gz;/path/to/patient_T_2.fastq.gz
+PAT01,PAT01,PAT01_T,tumor,dna,fastq,library_id:PAT01_T;lane:1,/path/to/PAT01_T_1.fastq.gz;/path/to/PAT01_T_2.fastq.gz
+PAT02,PAT02,PAT02_T,tumor,dna,fastq,library_id:PAT02_T;lane:1,/path/to/PAT02_T_L1_1.fastq.gz;/path/to/PAT02_T_L1_2.fastq.gz
+PAT02,PAT02,PAT02_T,tumor,dna,fastq,library_id:PAT02_T;lane:2,/path/to/PAT02_T_L2_1.fastq.gz;/path/to/PAT02_T_L2_2.fastq.gz
+PAT03,PAT03,PAT03_T,tumor,dna,fastq,library_id:PAT03_T;lane:1,/path/to/PAT03_T_1.fastq.gz;/path/to/PAT03_T_2.fastq.gz
+PAT03,PAT03,PAT03_N,normal,dna,fastq,library_id:PAT03_N;lane:1,/path/to/PAT03_N_1.fastq.gz;/path/to/PAT03_N_2.fastq.gz
 ```
+PAT01 is a single tumor sample, PAT02 has 2 sequencing lanes, and PAT03 is a tumor/normal pair. Results are written per patient, to `output_chr6/<group_id>/`.
+
+- `group_id`: one per patient. All rows of a patient (tumor, normal, lanes) share it.
 - `filetype`: `fastq`, so reads are aligned to the chr6-only reference.
 - `filepath`: R1 and R2 FASTQs separated by `;`.
-- `info`: `library_id` and `lane` are required for FASTQ input. Add one row per lane if a sample has several.
+- `info`: `library_id` and `lane` are required for FASTQ input. Add one row per lane if a sample has several (like PAT02); the lanes are merged into one BAM.
 - `sample_type`: `tumor` runs LILAC in tumor-only mode. To run in tumor/normal mode, add a second row with `sample_type` `normal` and the same `group_id`.
 
 Submit the job to align only to chromosome 6:
