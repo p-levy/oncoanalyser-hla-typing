@@ -15,14 +15,14 @@
 # ONLY CHANGE IF NEEDED
 INPUT=${1:-input.csv}
 OUTPUT=${2:-output_chr6}
-CONFIG_FILE=${3:-/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/oncoanalyser-lilac-only/chr6_genome.config}
+CONFIG_FILE=${3:-/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/oncoanalyser-hla-typing/chr6_genome.config}
 OPT_ARGS=${4:-"--processes_manual alignment,redux,lilac"} # Only run alignment by default
 
 # Check if chromosome 6 reference exists
-CHR6_REF_DIR="/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/oncoanalyser-lilac-only/chr6_reference"
+CHR6_REF_DIR="/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/oncoanalyser-hla-typing/chr6_reference"
 CHR6_FASTA="${CHR6_REF_DIR}/chr6_only.hg38.fasta"
 # Minimal HMF resources (REDUX + LILAC only), shipped with the repo
-HMF_DATA_DIR="/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/oncoanalyser-lilac-only/hmf_data_min"
+HMF_DATA_DIR="/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/oncoanalyser-hla-typing/hmf_data_min"
 
 if [[ ! -f "${CHR6_FASTA}" ]]; then
     echo "ERROR: Chromosome 6 reference not found at ${CHR6_FASTA}"

@@ -105,9 +105,9 @@ You can also set `export NXF_SINGULARITY_CACHEDIR=/path/to/singularity_cache` be
 
 In `RUN.hla_typing.slurm`, update these 3 paths to the absolute location of your clone:
 ```bash
-CONFIG_FILE=${3:-/path/to/oncoanalyser-lilac-only/chr6_genome.config}
-CHR6_REF_DIR="/path/to/oncoanalyser-lilac-only/chr6_reference"
-HMF_DATA_DIR="/path/to/oncoanalyser-lilac-only/hmf_data_min"
+CONFIG_FILE=${3:-/path/to/oncoanalyser-hla-typing/chr6_genome.config}
+CHR6_REF_DIR="/path/to/oncoanalyser-hla-typing/chr6_reference"
+HMF_DATA_DIR="/path/to/oncoanalyser-hla-typing/hmf_data_min"
 ```
 
 > **No need for the full HMF resource bundle (~10 GB).** Alignment, REDUX and LILAC only use 3 HMF resources (~20 MB), shipped in `hmf_data_min/`. `chr6_genome.config` overrides `hmf_data_paths` so oncoanalyser does not look for the other files. This override matches oncoanalyser **3.0.0**; check it if you change `-revision`. If you add other steps (e.g. PURPLE/SAGE to get allele copy number and somatic mutations in LILAC), use the full bundle and remove the override.
