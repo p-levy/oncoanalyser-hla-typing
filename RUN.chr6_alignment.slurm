@@ -73,6 +73,3 @@ nextflow run nf-core/oncoanalyser \
 # Note: The output BAM files will only contain reads that align to chromosome 6
 # Reads that don't align to chromosome 6 will be discarded during alignment
 
-echo "Chromosome 6-only alignment complete!"
-echo "Output BAM files contain only reads aligned to chromosome 6"
-
