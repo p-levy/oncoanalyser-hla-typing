@@ -40,6 +40,9 @@ chr6_reference/
 Created from below script using **GRCh38_masked_exclusions_alts_hlas.fasta** genome reference.
 
 #### 1.2 Create from custom whole-genome reference
+⚠️ Only if needed (e.g. You can't download from the above link or prefer to use another reference genome version).
+
+
 Run the full setup script with your reference genome path:
 ```bash
 ./setup_chr6_reference.sh /path/to/your/reference.fasta chr6_reference hg38
