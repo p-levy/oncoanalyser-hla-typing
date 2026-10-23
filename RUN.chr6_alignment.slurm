@@ -3,7 +3,6 @@
 #SBATCH -c 1 # max nr threads
 #SBATCH --time=2-00:00:00           # Time limit hrs:min:sec
 #SBATCH --output=R-%x.%j.out   # Standard output and error log
-#SBATCH --error=R-%x.%j.err
 #SBATCH --partition=highmem
 #SBATCH --mail-type=FAIL,END
 
@@ -69,6 +68,13 @@ nextflow run nf-core/oncoanalyser \
     --outdir ${OUTPUT} \
 	-resume \
     ${OPT_ARGS}
+
+# Exit with Nextflow's status so Slurm reports failed runs as FAILED
+NXF_EXIT=$?
+if [[ ${NXF_EXIT} -ne 0 ]]; then
+    echo "ERROR: nf-core/oncoanalyser failed (exit ${NXF_EXIT}), see .nextflow.log"
+    exit ${NXF_EXIT}
+fi
 
 # Note: The output BAM files will only contain reads that align to chromosome 6
 # Reads that don't align to chromosome 6 will be discarded during alignment
