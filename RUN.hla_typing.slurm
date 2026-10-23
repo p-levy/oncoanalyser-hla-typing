@@ -6,11 +6,11 @@
 #SBATCH --partition=highmem
 #SBATCH --mail-type=FAIL,END
 
-# Modified script for chromosome 6-only alignment using nf-core/oncoanalyser
+# HLA typing with nf-core/oncoanalyser: chromosome 6-only alignment, REDUX and LILAC
 # RUN WITH:
-# sbatch -J CHR6-ALIGN --mail-user=plevy@vhio.net RUN.chr6_alignment.slurm input.csv output_chr6
+# sbatch -J CHR6-ALIGN --mail-user=plevy@vhio.net RUN.hla_typing.slurm input.csv output_chr6
 # TEST RUN (MDA-MB-231 HLA-region reads, results in test/output_test/), launched from the test/ folder:
-# cd test && sbatch -J CHR6-TEST --mail-user=plevy@vhio.net ../RUN.chr6_alignment.slurm test
+# cd test && sbatch -J CHR6-TEST --mail-user=plevy@vhio.net ../RUN.hla_typing.slurm test
 
 # ONLY CHANGE IF NEEDED
 INPUT=${1:-input.csv}
@@ -56,7 +56,7 @@ if [[ "${INPUT}" == "test" ]]; then
     # FASTQ paths in the test samplesheet are relative to test/, so the test must be launched from there
     if [[ "$(pwd -P)" != "$(cd "${REPO_DIR}/test" && pwd -P)" ]]; then
         echo "ERROR: Launch the test from the repo's test/ folder:"
-        echo "cd ${REPO_DIR}/test && sbatch -J CHR6-TEST ../RUN.chr6_alignment.slurm test"
+        echo "cd ${REPO_DIR}/test && sbatch -J CHR6-TEST ../RUN.hla_typing.slurm test"
         exit 1
     fi
     INPUT="${REPO_DIR}/test/samplesheet.csv"

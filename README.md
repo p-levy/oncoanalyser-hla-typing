@@ -98,21 +98,13 @@ singularity {
 ```
 You can also set `export NXF_SINGULARITY_CACHEDIR=/path/to/singularity_cache` before `sbatch` instead. `cacheDir` in the config takes precedence if both are set.
 
-### 4. Run Alignment and LILAC HLA typing
+### 4. Run HLA typing (alignment, REDUX and LILAC)
 
-Update the `CONFIG_FILE` path:
+In `RUN.hla_typing.slurm`, update these 3 paths to the absolute location of your clone:
 ```bash
-CONFIG_FILE=${3:-./oncoanalyser-lilac-only/chr6_genome.config}
-```
-
-Update the `CHR6_REF_DIR` path:
-```bash
-CHR6_REF_DIR="./oncoanalyser-lilac-only/chr6_reference"
-```
-
-Update the `HMF_DATA_DIR` path to the `hmf_data_min` folder of this repository:
-```bash
-HMF_DATA_DIR="./oncoanalyser-lilac-only/hmf_data_min"
+CONFIG_FILE=${3:-/path/to/oncoanalyser-lilac-only/chr6_genome.config}
+CHR6_REF_DIR="/path/to/oncoanalyser-lilac-only/chr6_reference"
+HMF_DATA_DIR="/path/to/oncoanalyser-lilac-only/hmf_data_min"
 ```
 
 > **No need for the full HMF resource bundle (~10 GB).** Alignment, REDUX and LILAC only use 3 HMF resources (~20 MB), shipped in `hmf_data_min/`. `chr6_genome.config` overrides `hmf_data_paths` so oncoanalyser does not look for the other files. This override matches oncoanalyser **3.0.0**; check it if you change `-revision`. If you add other steps (e.g. PURPLE/SAGE to get allele copy number and somatic mutations in LILAC), use the full bundle and remove the override.
@@ -129,7 +121,7 @@ cohort,patient,patient_T,tumor,dna,fastq,library_id:patient_id;lane:1,/path/to/p
 
 Submit the job to align only to chromosome 6:
 ```bash
-sbatch -J CHR6-ALIGN --mail-user=your.email@vhio.net RUN.chr6_alignment.slurm input.csv output_chr6
+sbatch -J CHR6-ALIGN --mail-user=your.email@vhio.net RUN.hla_typing.slurm input.csv output_chr6
 ```
 
 ### Test run
@@ -138,7 +130,7 @@ A `test` profile checks the whole setup on a small dataset: about 54,000 read pa
 
 ```bash
 cd test
-sbatch -J CHR6-TEST --mail-user=your.email@vhio.net ../RUN.chr6_alignment.slurm test
+sbatch -J CHR6-TEST --mail-user=your.email@vhio.net ../RUN.hla_typing.slurm test
 ```
 This runs with `-profile singularity,test` and writes results to `test/output_test/` (resources capped at 8 CPUs, 16 GB, 2 h). Nextflow's run files (`work/`, `.nextflow/`) also stay in `test/` and are ignored by git.
 
@@ -208,7 +200,7 @@ This setup is a thin wrapper around [nf-core/oncoanalyser](https://github.com/nf
 
 If you use this setup, please cite the pipeline as nf-core/oncoanalyser asks:
 
-- **nf-core/oncoanalyser** Zenodo record, citing the version you ran (3.0.0 in `RUN.chr6_alignment.slurm`): [10.5281/zenodo.15189386](https://doi.org/10.5281/zenodo.15189386)
+- **nf-core/oncoanalyser** Zenodo record, citing the version you ran (3.0.0 in `RUN.hla_typing.slurm`): [10.5281/zenodo.15189386](https://doi.org/10.5281/zenodo.15189386)
 - **nf-core framework**:
   > Ewels PA, Peltzer A, Fillinger S, Patel H, Alneberg J, Wilm A, Garcia MU, Di Tommaso P, Nahnsen S. The nf-core framework for community-curated bioinformatics pipelines. _Nat Biotechnol._ 2020 Mar;38(3):276-278. doi: [10.1038/s41587-020-0439-x](https://doi.org/10.1038/s41587-020-0439-x).
 
