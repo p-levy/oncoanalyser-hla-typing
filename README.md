@@ -120,7 +120,7 @@ HMF_DATA_DIR="./oncoanalyser-lilac-only/hmf_data_min"
 Prepare `input.csv` (oncoanalyser samplesheet), one row per sample/FASTQ pair, e.g.:
 ```csv
 group_id,subject_id,sample_id,sample_type,sequence_type,filetype,info,filepath
-NCI3998,NCI3998,NCI3998N,tumor,dna,fastq,library_id:NCI3998N;lane:1,/path/to/3998N_1.fastq.gz;/path/to/3998N_2.fastq.gz
+cohort,patient,patient_T,tumor,dna,fastq,library_id:patient_id;lane:1,/path/to/patient_T_1.fastq.gz;/path/to/patient_T_2.fastq.gz
 ```
 - `filetype`: `fastq`, so reads are aligned to the chr6-only reference.
 - `filepath`: R1 and R2 FASTQs separated by `;`.
@@ -131,6 +131,31 @@ Submit the job to align only to chromosome 6:
 ```bash
 sbatch -J CHR6-ALIGN --mail-user=your.email@vhio.net RUN.chr6_alignment.slurm input.csv output_chr6
 ```
+
+### Test run
+
+A `test` profile checks the whole setup on a small dataset: about 54,000 read pairs from the HLA region of the **MDA-MB-231** breast cancer cell line. The test FASTQs are in `test/` and come with the clone, so no `input.csv` is needed: test mode uses `test/samplesheet.csv`. Its FASTQ paths are relative to `test/`, so **launch the test from the `test/` folder**. The chr6 reference (step 1) and `hmf_data_min/` are still required.
+
+```bash
+cd test
+sbatch -J CHR6-TEST --mail-user=your.email@vhio.net ../RUN.chr6_alignment.slurm test
+```
+This runs with `-profile singularity,test` and writes results to `test/output_test/` (resources capped at 8 CPUs, 16 GB, 2 h). Nextflow's run files (`work/`, `.nextflow/`) also stay in `test/` and are ignored by git.
+
+> Test runs takes about 3 min.
+
+Expected HLA types in `test/output_test/MDAMB231/lilac/MDAMB231.lilac.tsv`:
+
+| Gene | Alleles |
+|---|---|
+| HLA-A | A\*02:01, A\*02:17 |
+| HLA-B | B\*40:02, B\*41:01 |
+| HLA-C | C\*02:02, C\*17:01 |
+| HLA-DPA1 | DPA1\*01:03, DPA1\*02:01 |
+| HLA-DPB1 | DPB1\*02:01, DPB1\*17:01 |
+| HLA-DQA1 | DQA1\*02:01, DQA1\*05:05 |
+| HLA-DQB1 | DQB1\*02:02, DQB1\*03:01 |
+
 
 ## Docker Images Used
 
@@ -161,8 +186,8 @@ Written to `output_chr6/<group_id>/lilac/`:
 
 | File | Content |
 |---|---|
-| `<tumor_id>.lilac.tsv` | **Main result**: one row per called HLA class I allele (2 each for A, B, C), e.g. `A*02:05` |
-| `<tumor_id>.lilac.qc.tsv` | One-row QC summary for the sample |
+| `<tumor_id>.lilac.tsv` | **Main result**: one row per called allele. The `Genes` column groups them: `MHC_CLASS_1` (2 each for A, B, C, e.g. `A*02:05`), and `HLA_DPA1`, `HLA_DPB1`, `HLA_DQA1`, `HLA_DQB1` for class II (LILAC ≥ 2.0) |
+| `<tumor_id>.lilac.qc.tsv` | QC summary, one row per gene group |
 | `<tumor_id>.lilac.candidates.coverage.tsv` | Fragment coverage of the top-scoring candidate allele sets |
 
 Key columns in `lilac.tsv`:

@@ -1,0 +1,2 @@
+group_id,subject_id,sample_id,sample_type,sequence_type,filetype,info,filepath
+MDAMB231,MDAMB231,MDAMB231,tumor,dna,fastq,library_id:MDAMB231;lane:1,MDAMB231_hla_R1.fastq.gz;MDAMB231_hla_R2.fastq.gz

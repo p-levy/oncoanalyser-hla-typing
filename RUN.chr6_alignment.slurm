@@ -9,6 +9,8 @@
 # Modified script for chromosome 6-only alignment using nf-core/oncoanalyser
 # RUN WITH:
 # sbatch -J CHR6-ALIGN --mail-user=plevy@vhio.net RUN.chr6_alignment.slurm input.csv output_chr6
+# TEST RUN (MDA-MB-231 HLA-region reads, results in test/output_test/), launched from the test/ folder:
+# cd test && sbatch -J CHR6-TEST --mail-user=plevy@vhio.net ../RUN.chr6_alignment.slurm test
 
 # ONLY CHANGE IF NEEDED
 INPUT=${1:-input.csv}
@@ -43,6 +45,29 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
     exit 1
 fi
 
+# Test run on MDA-MB-231 HLA-region reads from the repo's test/ folder, results in test/output_test/
+if [[ "${INPUT}" == "test" ]]; then
+    REPO_DIR=$(dirname "${CONFIG_FILE}")
+    if [[ ! -f "${REPO_DIR}/test/MDAMB231_hla_R1.fastq.gz" ]]; then
+        echo "ERROR: Test FASTQs not found in ${REPO_DIR}/test/"
+        echo "Please run: bash ${REPO_DIR}/test/make_test_data.sh"
+        exit 1
+    fi
+    # FASTQ paths in the test samplesheet are relative to test/, so the test must be launched from there
+    if [[ "$(pwd -P)" != "$(cd "${REPO_DIR}/test" && pwd -P)" ]]; then
+        echo "ERROR: Launch the test from the repo's test/ folder:"
+        echo "cd ${REPO_DIR}/test && sbatch -J CHR6-TEST ../RUN.chr6_alignment.slurm test"
+        exit 1
+    fi
+    INPUT="${REPO_DIR}/test/samplesheet.csv"
+    OUTPUT="output_test"
+    PROFILE="singularity,test"
+else
+    PROFILE="singularity"
+fi
+# --outdir must be given on the command line: oncoanalyser reads it while loading its own config, before -c profiles apply
+IO_ARGS="--input ${INPUT} --outdir ${OUTPUT}"
+
 echo "Running nf-core/oncoanalyser with chromosome 6-only reference..."
 echo "Input: ${INPUT}"
 echo "Output: ${OUTPUT}"
@@ -56,7 +81,7 @@ mkdir -p tmp
 # Run nf-core/oncoanalyser with custom chromosome 6 genome
 nextflow run nf-core/oncoanalyser \
     -revision 3.0.0 \
-    -profile singularity \
+    -profile ${PROFILE} \
     -c ${CONFIG_FILE} \
     --ref_data_hmf_data_path ${HMF_DATA_DIR} \
     --mode wgts \
@@ -64,8 +89,7 @@ nextflow run nf-core/oncoanalyser \
 	--genome_version 38 \
     --force_genome \
 	--genome_type no_alt \
-    --input ${INPUT} \
-    --outdir ${OUTPUT} \
+    ${IO_ARGS} \
 	-resume \
     ${OPT_ARGS}
 

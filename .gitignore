@@ -1,3 +1,11 @@
 chr6_reference
 accessory*
 *.tar.gz
+test/work/
+test/.nextflow*
+test/output_test/
+test/tmp/
+test/cache/
+test/R-*.out
+test/results/
+test/null/
