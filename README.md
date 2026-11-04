@@ -34,7 +34,8 @@ chr6_reference/
 ├── chr6_only.hg38.dict
 ├── chr6_only.hg38.fasta
 ├── chr6_only.hg38.fasta.fai
-└── chr6_only.hg38.fasta.img
+├── chr6_only.hg38.fasta.img
+└── star_index                  # only for RNA samples, see 1.3
 ```
 
 Created from below script using **GRCh38_masked_exclusions_alts_hlas.fasta** genome reference.
@@ -53,6 +54,23 @@ This will create (using Docker containers):
 - `chr6_reference/chr6_only.hg38.fasta` - Chromosome 6 sequence
 - Required indexes (BWA-MEM2, FASTA index, dictionary, etc.)
 
+#### 1.3 Build the chr6 STAR index (only for RNA samples)
+RNA FASTQs are aligned with STAR 2.7.3a, which needs its own index (`chr6_reference/star_index/`, ~1.5 GB). Build it once, from the repo root:
+```bash
+sbatch prepare_chr6_ref/build_chr6_star_index.slurm
+```
+The splice junctions are the chr6 lines of `sjdbList.out.tab` from the HMF GRCh38 STAR index (`star_index-gencode_38-2.7.3a`, gencode v38, `--sjdbOverhang 200`), the index oncoanalyser uses by default. You can pass a GTF instead as the first argument (`sbatch prepare_chr6_ref/build_chr6_star_index.slurm /path/to/annotation.gtf`); it is filtered to chr6. The job takes a few minutes (4 CPUs, 16 GB) and uses the STAR singularity image from the shared cache directory (step 3), pulling it if missing.
+
+> **Why STAR needs extra options with a chr6-only index.** Most RNA reads come from other chromosomes. With only chr6 indexed, they anchor on chr6 repeats (which have too many copies to be used as anchors in the full genome), and STAR then searches thousands of alignment windows per read before giving up: ~1.5 M read pairs/h on 8 CPUs, i.e. more than a day per sample. `chr6_genome.config` caps this search on `STAR_ALIGN` (`--winAnchorMultimapNmax 5 --seedMultimapNmax 1000 --alignWindowsPerReadNmax 1000`), which gives ~29 M pairs/h.
+>
+> Benchmark on 200k read pairs of a PDX RNA sample, with the full-genome HMF STAR index as truth:
+> - Capping the search finds the same MHC and HLA-gene reads as the uncapped chr6 run.
+> - Both chr6 runs find 99% of the MHC reads and 32 of the 36 HLA-gene read pairs that the full genome places there.
+> - Both chr6 runs also place reads in the MHC that the full genome maps elsewhere (human paralogs). In the HLA genes this was 4 pairs, against 36 true ones.
+> - Adding chrM and rDNA contigs to the index did not change the speed.
+
+DNA-only runs don't need this index. `RUN.hla_typing.slurm` stops with an error if the samplesheet has RNA FASTQs and the index is missing.
+
 
 
 ### 2. Update Configuration
@@ -68,6 +86,7 @@ params {
             dict          = "/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/alignments/chr6_reference/chr6_only.hg38.dict"
             img           = "/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/alignments/chr6_reference/chr6_only.hg38.fasta.img"
             bwamem2_index = "/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/alignments/chr6_reference/bwamem2_index/"
+            star_index    = "/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/alignments/chr6_reference/star_index/"
         }
     }
 }
@@ -84,13 +103,16 @@ for img in \
     fastp:0.23.4--hadf994f_2 \
     mulled-v2-4dde50190ae599f2bb2027cb2c8763ea00fb5084:596c0d6a494faa218562f2be03af2714d454da4f-0 \
     hmftools-redux:2.0.5--hdfd78af_0 \
-    hmftools-lilac:2.0--hdfd78af_0
+    hmftools-lilac:2.0--hdfd78af_0 \
+    star:2.7.3a--0 \
+    samtools:1.21--h50ea8bc_0 \
+    gatk4:4.6.1.0--py310hdfd78af_0
 do
     singularity pull --name "depot.galaxyproject.org-singularity-${img//:/-}.img" \
         --dir ${CACHE_DIR} "https://depot.galaxyproject.org/singularity/${img}"
 done
 ```
-The file names follow the Nextflow naming convention (`depot.galaxyproject.org-singularity-<image>-<tag>.img`), so Nextflow finds them instead of downloading again. The images are FASTP and BWA-MEM2 (alignment), REDUX and LILAC.
+The file names follow the Nextflow naming convention (`depot.galaxyproject.org-singularity-<image>-<tag>.img`), so Nextflow finds them instead of downloading again. The images are FASTP and BWA-MEM2 (DNA alignment), REDUX and LILAC, and STAR, samtools and GATK (RNA alignment: STAR, sort, MarkDuplicates; only needed with RNA samples).
 
 Then point the `singularity` block of `chr6_genome.config` to that directory:
 ```groovy
@@ -120,14 +142,22 @@ PAT02,PAT02,PAT02_T,tumor,dna,fastq,library_id:PAT02_T;lane:1,/path/to/PAT02_T_L
 PAT02,PAT02,PAT02_T,tumor,dna,fastq,library_id:PAT02_T;lane:2,/path/to/PAT02_T_L2_1.fastq.gz;/path/to/PAT02_T_L2_2.fastq.gz
 PAT03,PAT03,PAT03_T,tumor,dna,fastq,library_id:PAT03_T;lane:1,/path/to/PAT03_T_1.fastq.gz;/path/to/PAT03_T_2.fastq.gz
 PAT03,PAT03,PAT03_N,normal,dna,fastq,library_id:PAT03_N;lane:1,/path/to/PAT03_N_1.fastq.gz;/path/to/PAT03_N_2.fastq.gz
+PAT03,PAT03,PAT03_RNA,tumor,rna,fastq,library_id:PAT03_RNA;lane:1,/path/to/PAT03_RNA_1.fastq.gz;/path/to/PAT03_RNA_2.fastq.gz
 ```
-PAT01 is a single tumor sample, PAT02 has 2 sequencing lanes, and PAT03 is a tumor/normal pair. Results are written per patient, to `output_chr6/<group_id>/`.
+PAT01 is a single tumor sample, PAT02 has 2 sequencing lanes, and PAT03 is a tumor/normal pair with tumor RNA. Results are written per patient, to `output_chr6/<group_id>/lilac/`.
+
+> **Only LILAC results are kept.** oncoanalyser publishes all its outputs, including BAMs, through one output block that can't be filtered from a config. `RUN.hla_typing.slurm` therefore publishes them as symlinks into `output_chr6_links/`. After a successful run it copies only `<group_id>/lilac/` and `pipeline_info/` into `output_chr6/` and deletes the symlinks folder. The BAMs stay in `work/` only, where `-resume` still uses them. Copy them from `work/` before cleaning it if you need them.
 
 - `group_id`: one per patient. All rows of a patient (tumor, normal, lanes) share it.
 - `filetype`: `fastq`, so reads are aligned to the chr6-only reference.
 - `filepath`: R1 and R2 FASTQs separated by `;`.
 - `info`: `library_id` and `lane` are required for FASTQ input. Add one row per lane if a sample has several (like PAT02); the lanes are merged into one BAM.
 - `sample_type`: `tumor` runs LILAC in tumor-only mode. To run in tumor/normal mode, add a second row with `sample_type` `normal` and the same `group_id`.
+- `sequence_type`: `dna`, or `rna` for tumor RNA (needs the STAR index, step 1.3). Give the RNA row the same `group_id` as the DNA, and its own `sample_id` and `library_id`.
+
+> **What RNA adds.** LILAC calls the alleles from DNA only. RNA reads fill the `Rna*` columns of `lilac.tsv` (expression support for each called allele), and the allele calls stay the same. A `group_id` with only RNA gets its RNA aligned, but LILAC is skipped.
+>
+> **PDX samples.** RNA FASTQs that were not cleaned of mouse reads (e.g. with bbsplit, as done for the PDX WES `_hs_` FASTQs) can put mouse H2 reads on the chr6 HLA genes. This only affects the `Rna*` columns.
 
 Submit the job to align only to chromosome 6:
 ```bash
@@ -176,6 +206,8 @@ The workflow to prepare chr6 references uses these Docker images:
 3. Only reads with good alignments to chromosome 6 are kept
 4. The output BAM files contain only chromosome 6 alignments
 
+RNA reads are aligned the same way with STAR (splice-aware), then sorted and duplicate-marked with GATK MarkDuplicates. Unlike the DNA BAMs, the RNA BAM keeps unmapped reads (oncoanalyser runs STAR with `--outSAMunmapped Within`). The BAMs (e.g. `PAT03_T.redux.bam` and `PAT03_RNA.md.bam`) are not copied to `output_chr6/`. They stay in the REDUX and MarkDuplicates task folders under `work/`.
+
 ### Output BAM characteristics:
 - Much smaller file sizes (only chr6 reads)
 - All reads have chromosome 6 coordinates
@@ -204,6 +236,15 @@ Key columns in `lilac.qc.tsv`:
 
 See the [LILAC documentation](https://github.com/hartwigmedical/hmftools/tree/master/lilac) for the full column descriptions.
 
+### Summary table of all patients
+
+`summarize_lilac.py` gathers every `<group_id>/lilac/<group_id>.lilac.tsv` of an output folder into one table. It has one row per patient and gene (HLA-A, -B, -C, -DPA1, -DPB1, -DQA1, -DQB1), with the columns `sample_id`, `gene`, `allele1`, `allele2`, `homozygous` (yes/no for that gene) and `loh_likelihood`. `loh_likelihood` is `yes` for every row of a patient homozygous at all HLA genes. This most likely means loss of heterozygosity (LOH) of the HLA region, because germline homozygosity at all genes is rare. With tumor-only data it is a flag, not an LOH call. The table is not generated by the pipeline. Run it by hand, and again after adding patients (it needs only python3, and runs in seconds):
+
+```bash
+python3 summarize_lilac.py output_chr6         # writes output_chr6/lilac_alleles.tsv
+python3 summarize_lilac.py output_chr6 --rna   # adds allele1_RnaUnique / allele2_RnaUnique (NA for samples run without RNA)
+```
+
 ## Credits and Citations
 
 This setup is a thin wrapper around [nf-core/oncoanalyser](https://github.com/nf-core/oncoanalyser), written and maintained by Stephen Watts ([@scwatts](https://github.com/scwatts)) at the University of Melbourne Centre for Cancer Research, with assistance from Hartwig Medical Foundation Australia, as part of the nf-core community. The analysis tools (REDUX, LILAC) are from the [Hartwig Medical Foundation hmftools](https://github.com/hartwigmedical/hmftools) suite. All credit for the pipeline and its tools goes to their authors.
@@ -217,6 +258,7 @@ If you use this setup, please cite the pipeline as nf-core/oncoanalyser asks:
 Also cite the tools used by this workflow. The full list is in the pipeline's [CITATIONS.md](https://github.com/nf-core/oncoanalyser/blob/master/CITATIONS.md):
 - **Nextflow**: Di Tommaso P, et al. Nextflow enables reproducible computational workflows. _Nat Biotechnol._ 2017;35(4):316-319. doi: [10.1038/nbt.3820](https://doi.org/10.1038/nbt.3820).
 - **bwa-mem2**: Vasimuddin Md, Misra S, Li H, Aluru S. Efficient Architecture-Aware Acceleration of BWA-MEM for Multicore Systems. _IPDPS_ 2019:314-324. doi: [10.1109/IPDPS.2019.00041](https://doi.org/10.1109/IPDPS.2019.00041).
+- **STAR** (RNA samples): Dobin A, et al. STAR: ultrafast universal RNA-seq aligner. _Bioinformatics._ 2013;29(1):15-21. doi: [10.1093/bioinformatics/bts635](https://doi.org/10.1093/bioinformatics/bts635).
 - **LILAC**: Martínez-Jiménez F, et al. Genetic immune escape landscape in primary and metastatic cancer. _Nat Genet._ 2023;55(5):820-831. doi: [10.1038/s41588-023-01367-1](https://doi.org/10.1038/s41588-023-01367-1).
 - **REDUX**: [hmftools/redux](https://github.com/hartwigmedical/hmftools/tree/master/redux) (Hartwig Medical Foundation).
 
