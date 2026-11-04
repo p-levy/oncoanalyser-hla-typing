@@ -65,8 +65,19 @@ if [[ "${INPUT}" == "test" ]]; then
 else
     PROFILE="singularity"
 fi
+
+# RNA samples need the chr6-only STAR index
+if grep -q ',rna,fastq,' "${INPUT}" && [[ ! -f "${CHR6_REF_DIR}/star_index/SA" ]]; then
+    echo "ERROR: ${INPUT} has RNA FASTQs but the chr6 STAR index is missing: ${CHR6_REF_DIR}/star_index"
+    echo "Please build it first, from the repo root:"
+    echo "sbatch prepare_chr6_ref/build_chr6_star_index.slurm"
+    exit 1
+fi
 # --outdir must be given on the command line: oncoanalyser reads it while loading its own config, before -c profiles apply
-IO_ARGS="--input ${INPUT} --outdir ${OUTPUT}"
+# oncoanalyser publishes everything (incl. BAMs) through one output block, which config can't filter per file.
+# So results are published as symlinks into LINKS_DIR, and only LILAC results are copied to OUTPUT (see end of script)
+LINKS_DIR="${OUTPUT}_links"
+IO_ARGS="--input ${INPUT} --outdir ${LINKS_DIR} --publish_dir_mode symlink"
 
 echo "Running nf-core/oncoanalyser with chromosome 6-only reference..."
 echo "Input: ${INPUT}"
@@ -99,6 +110,19 @@ if [[ ${NXF_EXIT} -ne 0 ]]; then
     echo "ERROR: nf-core/oncoanalyser failed (exit ${NXF_EXIT}), see .nextflow.log"
     exit ${NXF_EXIT}
 fi
+
+# Keep only LILAC results (and the run reports): copy them out of the symlinked results, then drop the symlinks.
+# Alignments (BAMs) stay in work/ only, where -resume still finds them
+set -e
+for lilac_dir in "${LINKS_DIR}"/*/lilac; do
+    [[ -d "${lilac_dir}" ]] || continue
+    group_dir="${OUTPUT}/$(basename "$(dirname "${lilac_dir}")")"
+    mkdir -p "${group_dir}"
+    cp -rL "${lilac_dir}" "${group_dir}/"
+done
+cp -rL "${LINKS_DIR}/pipeline_info" "${OUTPUT}/"
+rm -r "${LINKS_DIR}"
+echo "LILAC results copied to ${OUTPUT}/<group_id>/lilac/"
 
 # Note: The output BAM files will only contain reads that align to chromosome 6
 # Reads that don't align to chromosome 6 will be discarded during alignment
