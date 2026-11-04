@@ -9,3 +9,4 @@ test/cache/
 test/R-*.out
 test/results/
 test/null/
+test/output_test_links/
