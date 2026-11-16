@@ -50,6 +50,10 @@ for lilac_file in lilac_files:
     # Homozygous at every HLA gene: likely LOH of the HLA region (germline homozygosity at all genes is rare).
     # Tumor-only typing can't tell the two apart, so this is a flag, not a call
     loh_likely = "yes" if all(len({r["Allele"] for r in a}) == 1 for a in alleles.values()) else "no"
+    # Class I only (RNA-only typing, RUN.hla_typing_rna_only.slurm): homozygous calls can come from a silenced allele,
+    # and the class II half of the HLA region isn't typed, so no LOH flag
+    if not any(g.startswith("HLA-D") for g in alleles):
+        loh_likely = "NA"
 
     for gene in sorted(alleles, key=lambda g: (GENE_ORDER.index(g) if g in GENE_ORDER else len(GENE_ORDER), g)):
         gene_rows = alleles[gene]
