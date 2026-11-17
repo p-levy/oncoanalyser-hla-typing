@@ -11,7 +11,7 @@ REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CHR6_FASTA=${CHR6_FASTA:-/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/oncoanalyser-hla-typing/chr6_reference/chr6_only.hg38.fasta}
 LILAC_DIR="${REPO_DIR}/hmf_data_min/misc/lilac"
 OUT="${REPO_DIR}/prefilter/hla_bait.fa.gz"
-PAD=1000    # bp added on each side of the LILAC regions (as in accessory/make_test_data.sh)
+PAD=1000    # bp added on each side of the LILAC regions (as in test/make_test_data.sh)
 MIN_LEN=27  # bait pieces shorter than the bbduk k-mer length can't match anything
 
 # samtools from PATH, otherwise from the samtools image
