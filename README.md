@@ -164,6 +164,19 @@ Submit the job to align only to chromosome 6:
 sbatch -J CHR6-ALIGN --mail-user=your.email@vhio.net RUN.hla_typing.slurm input.csv output_chr6
 ```
 
+#### HLA read pre-filter (on by default)
+LILAC only uses reads from the HLA genes, so before oncoanalyser both RUN scripts keep only the FASTQ read pairs that share a 27-mer with `prefilter/hla_bait.fa.gz`. Without the pre-filter, BWA and STAR align every read, the BAMs keep the unmapped reads, and STAR writes them uncompressed (about 37 GB per RNA sample in `work/`).
+- **The bait** holds the 9 LILAC gene regions (`hla.38.bed`, ±1 kb, from the chr6 reference) and all LILAC allele sequences. Rebuild it with `prefilter/build_hla_bait.sh` only if `hmf_data_min/misc/lilac/` changes.
+- **How it runs:** `prefilter/hla_prefilter.slurm` (bbduk, BBMap 39.18 image) runs one job per FASTQ pair, at most 5 at once, each with 4 CPUs and 8 GB. The main job waits for them. A pair takes 2–5 min. It keeps a pair when either mate matches.
+- **Outputs:** the filtered FASTQs and the samplesheet pointing to them are in `<output>_hla_fastq/`, with the kept fraction per pair in `prefilter_counts.tsv`. Already filtered pairs are skipped when you re-run. `bam` and `redux_dir` rows are used as they are.
+- **To align the full FASTQs instead:** `sbatch --export=ALL,PREFILTER=0 ... RUN.hla_typing.slurm input.csv output_chr6`. Then set `cpus = 8` back for BWA and STAR in `chr6_genome.config`.
+
+Validated on 8 PDX samples (WES + RNA) against their full-FASTQ results:
+- **Pairs kept:** 2.3–5.8% for WES and 2.7–6.1% for RNA. These include the repeats in the bait's introns and flanks, and the highly expressed class I genes.
+- **Allele calls:** 56 of 56 genes were identical.
+- **`RnaUnique`:** usually within 1–2% (largest difference 17%, on a low count).
+- **Speed and space:** the 8 samples took 24 min, and `work/` held about 2.6 GB per sample instead of about 50 GB.
+
 ### RNA-only samples (class I only)
 
 Samples with RNA but no DNA can still get class I types. `RUN.hla_typing_rna_only.slurm` aligns their RNA to chr6 with oncoanalyser (same STAR settings), then `accessory/lilac_rna_only.slurm` runs LILAC on each RNA BAM given as `-tumor_bam`. It runs as a separate 4-CPU job, which the main job waits for. Use a samplesheet with only RNA rows (one `group_id` per sample, `sequence_type` `rna`), and a separate output folder:
@@ -174,6 +187,7 @@ Results go to `output_chr6_rnaonly/<group_id>/lilac/`. Here the `Tumor*` columns
 - **Tested** on 3 PDX samples with known DNA types (full-genome RNA BAMs, LILAC 2.0). All 9 class I genes (A, B, C in each) matched the DNA call, including heterozygous ones, with QC `PASS`.
 - **Class II is not typed**: PDX tumor cells barely express it, and calls from the few reads were wrong.
 - **Homozygous calls** can also come from an allele that isn't expressed, so `summarize_lilac.py` gives `NA` as `loh_likelihood` for class I-only results.
+- **Weakly expressed alleles** can be missed. In a second test on 2 PDX samples (pre-filtered RNA), 5 of 6 genes matched the DNA call. The miss was M5 HLA-B: B\*18:01 has 5% of the gene's unique RNA reads (94 against 1776), and LILAC called it B\*44:03 homozygous (QC `WARN_UNMATCHED_HAPLOTYPE`). The pre-filter keeps those reads (94 of 95 in the DNA+RNA run), so the miss comes from typing from RNA alone.
 
 ### Test run
 

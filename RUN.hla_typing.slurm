@@ -11,8 +11,11 @@
 # sbatch -J CHR6-ALIGN --mail-user=plevy@vhio.net RUN.hla_typing.slurm input.csv output_chr6
 # TEST RUN (MDA-MB-231 HLA-region reads, results in test/output_test/), launched from the test/ folder:
 # cd test && sbatch -J CHR6-TEST --mail-user=plevy@vhio.net ../RUN.hla_typing.slurm test
+# FASTQs are first reduced to their HLA read pairs (prefilter/, ~0.1-1% of reads); to align the full FASTQs instead:
+# sbatch -J CHR6-ALIGN --export=ALL,PREFILTER=0 RUN.hla_typing.slurm input.csv output_chr6
 
 # ONLY CHANGE IF NEEDED
+PREFILTER=${PREFILTER:-1}
 INPUT=${1:-input.csv}
 OUTPUT=${2:-output_chr6}
 CONFIG_FILE=${3:-/mnt/bioinfnas/immuno/plevy/proj/hlatyping/lilac/oncoanalyser-hla-typing/chr6_genome.config}
@@ -64,6 +67,24 @@ if [[ "${INPUT}" == "test" ]]; then
     PROFILE="singularity,test"
 else
     PROFILE="singularity"
+fi
+
+# HLA pre-filter: keep only the FASTQ read pairs with an HLA k-mer (prefilter/hla_bait.fa.gz: LILAC regions + all
+# LILAC allele sequences), one job per FASTQ pair (max 5 at once), then run oncoanalyser on these small FASTQs.
+# Filtered FASTQs are kept in <OUTPUT>_hla_fastq/ (finished pairs are skipped on a re-run); bam/redux_dir rows unchanged
+if [[ "${PREFILTER}" == "1" ]] && grep -q ',fastq,' "${INPUT}"; then
+    REPO_DIR=$(dirname "${CONFIG_FILE}")
+    PREFILTER_DIR="$(pwd)/${OUTPUT}_hla_fastq"
+    HLA_INPUT="${PREFILTER_DIR}/$(basename "${INPUT%.csv}")_hla.csv"
+    N_PAIRS=$(python3 "${REPO_DIR}/prefilter/prefilter_input.py" "${INPUT}" "${PREFILTER_DIR}" "${HLA_INPUT}") || exit 1
+    echo "HLA pre-filter of ${N_PAIRS} FASTQ pairs into ${PREFILTER_DIR}/ ..."
+    if ! sbatch --wait --array=1-${N_PAIRS}%5 --output="${PREFILTER_DIR}/R-%x.%A_%a.out" \
+            "${REPO_DIR}/prefilter/hla_prefilter.slurm" "${PREFILTER_DIR}" "${REPO_DIR}/prefilter/hla_bait.fa.gz"; then
+        echo "ERROR: HLA pre-filter failed, see ${PREFILTER_DIR}/R-HLA-PREFILTER.*.out"
+        exit 1
+    fi
+    cat "${PREFILTER_DIR}"/*.counts.tsv | awk 'NR == 1 || $1 != "prefix"' > "${PREFILTER_DIR}/prefilter_counts.tsv"
+    INPUT="${HLA_INPUT}"
 fi
 
 # RNA samples need the chr6-only STAR index
@@ -123,7 +144,4 @@ done
 cp -rL "${LINKS_DIR}/pipeline_info" "${OUTPUT}/"
 rm -r "${LINKS_DIR}"
 echo "LILAC results copied to ${OUTPUT}/<group_id>/lilac/"
-
-# Note: The output BAM files will only contain reads that align to chromosome 6
-# Reads that don't align to chromosome 6 will be discarded during alignment
 

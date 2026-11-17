@@ -32,6 +32,22 @@ if grep -q ',dna,' "${INPUT}"; then
     exit 1
 fi
 
+# HLA pre-filter of the FASTQs (as in RUN.hla_typing.slurm; PREFILTER=0 aligns the full FASTQs)
+PREFILTER=${PREFILTER:-1}
+if [[ "${PREFILTER}" == "1" ]] && grep -q ',fastq,' "${INPUT}"; then
+    PREFILTER_DIR="$(pwd)/${OUTPUT}_hla_fastq"
+    HLA_INPUT="${PREFILTER_DIR}/$(basename "${INPUT%.csv}")_hla.csv"
+    N_PAIRS=$(python3 "${REPO_DIR}/prefilter/prefilter_input.py" "${INPUT}" "${PREFILTER_DIR}" "${HLA_INPUT}") || exit 1
+    echo "HLA pre-filter of ${N_PAIRS} FASTQ pairs into ${PREFILTER_DIR}/ ..."
+    if ! sbatch --wait --array=1-${N_PAIRS}%5 --output="${PREFILTER_DIR}/R-%x.%A_%a.out" \
+            "${REPO_DIR}/prefilter/hla_prefilter.slurm" "${PREFILTER_DIR}" "${REPO_DIR}/prefilter/hla_bait.fa.gz"; then
+        echo "ERROR: HLA pre-filter failed, see ${PREFILTER_DIR}/R-HLA-PREFILTER.*.out"
+        exit 1
+    fi
+    cat "${PREFILTER_DIR}"/*.counts.tsv | awk 'NR == 1 || $1 != "prefix"' > "${PREFILTER_DIR}/prefilter_counts.tsv"
+    INPUT="${HLA_INPUT}"
+fi
+
 # Alignments are published as symlinks into LINKS_DIR (BAMs stay in work/), only LILAC results are copied to OUTPUT
 LINKS_DIR="${OUTPUT}_links"
 IO_ARGS="--input ${INPUT} --outdir ${LINKS_DIR} --publish_dir_mode symlink"
