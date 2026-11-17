@@ -1,5 +1,7 @@
 chr6_reference
-accessory*
+# accessory/ holds local files (test BAM, images, old helpers); only the scripts the pipeline calls are tracked
+accessory/*
+!accessory/lilac_rna_only.slurm
 *.tar.gz
 test/work/
 test/.nextflow*
